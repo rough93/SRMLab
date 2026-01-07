@@ -1,5 +1,5 @@
 function s = computeMotorSummary(out, cfg)
-%COMPUTEMOTORSUMMARY Compute OpenMotor-like readout metrics (stack-safe)
+%COMPUTEMOTORSUMMARY Compute readout metrics
 
 g0 = 9.80665;
 
@@ -33,12 +33,12 @@ Ap_eff   = Ap_eff(1:N);
 if ~isempty(Ap_eff_seg)
     Ap_eff_seg = Ap_eff_seg(1:min(size(Ap_eff_seg,1), N), :);
     if size(Ap_eff_seg,1) < N
-        % Pad with NaNs so indexing stays safe
+        % Pad with NaNs
         Ap_eff_seg(end+1:N, :) = NaN;
     end
 end
 
-% Burn time definition: from first time Pc exceeds 5% of peak to last time >5% of peak
+% Burn time definition is from first time Pc exceeds 5% of peak to last time >5% of peak
 Pc_pk = max(Pc);
 th = 0.05 * Pc_pk;
 i0 = find(Pc > th, 1, 'first');
@@ -89,8 +89,8 @@ portThroat = Ap0 / At;
 % Peak throat mass flux: Gt = mdot/At
 Gt_pk = max(mdot_noz / At);
 
-% ---- Peak port mass flux (burn-window max, OpenMotor-comparable) ----
-KG_M2_TO_LB_IN2 = 2.20462262185 / (39.3700787402^2); % 0.00142233...
+% Peak port mass flux
+KG_M2_TO_LB_IN2 = 2.20462262185 / (39.3700787402^2);
 
 % Burn-window indices clamped to [1,N]
 if ~isempty(i0) && ~isempty(i1) && i1 >= i0
@@ -138,18 +138,18 @@ else
     s.peakPortMassFluxSeg_lb_in2_s = [];
 end
 
-% ---- Ideal and delivered thrust coefficients ----
+% Ideal and delivered thrust coefficients
 Cf_ideal_pk = nozzleCfIdeal(cfg.noz.eps, cfg.prop.gamma, Pc_peak, cfg.noz.Pa);
 
 den = trapz(t, Pc * At);
 Cf_del = Itot / max(den, eps);
 
-% ---- Volume loading (from geo.const) ----
+% Volume loading ----
 Vcase  = cfg.geo.const.Vcase;
 Vprop0 = cfg.geo.const.Vprop0;
 volLoading = Vprop0 / Vcase;
 
-% ---- Motor designation ----
+% Motor designation
 s.designation = suggestDesignation(Itot, burnTime, 0.07);
 
 % Bundle
@@ -176,7 +176,7 @@ s.peakMassFlux = Gt_pk;
 end
 
 function des = suggestDesignation(Itot, burnTime, tol)
-% NAR/TRA-style motor designation: Letter = total impulse class, Number = avg thrust, (tol%)
+% NAR/TRA-style motor designation
 
 if nargin < 3 || isempty(tol)
     tol = 0.07;
@@ -188,7 +188,7 @@ classLetters = { ...
 classMaxNs = [ ...
     0.625, 1.25, 2.50, 5, 10, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10240, 20480, 40960, 81920 ];
 
-% OpenMotor-style: choose class based on a conservative (lower) impulse with tolerance
+% Choose class based on a conservative impulse with tolerance
 I_nom = Itot * (1 - tol);
 
 idx = find(I_nom <= classMaxNs, 1, 'first');

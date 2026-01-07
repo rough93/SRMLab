@@ -11,13 +11,12 @@ function out = simulateMotor(cfg)
 %   x  = burn depth / regression variable (m)
 %   Pc = chamber pressure (Pa)
 
-% Map OpenMotor-like names to solver names (so solver code stays unchanged)
 cfg.prop.rho   = cfg.prop.density_kgm3;
 cfg.prop.M     = cfg.prop.M_kgmol;
 cfg.prop.Tc    = cfg.prop.Tc_K;
 
-cfg.grain.free_volume_m3 = 0;        % head-end free volume if you want, else 0
-cfg.grain.inhibit_outer = true;      % usually true
+cfg.grain.free_volume_m3 = 0;        % head-end free volume
+cfg.grain.inhibit_outer = true;
 g0 = 9.80665;
 
 % Unpack prop
@@ -38,7 +37,7 @@ tmax = cfg.num.tmax;
 
 % Initial conditions
 x0  = 0;
-Pc0 = cfg.noz.Pa;     % start near ambient (you can set higher if you model ignition)
+Pc0 = cfg.noz.Pa;
 
 % Preallocate (simple)
 Nmax = ceil(tmax/dt) + 5;
@@ -66,7 +65,7 @@ while t(k) < tmax
     if isfield(st,'Ap')
         Ap(k) = st.Ap;
     else
-        Ap(k) = NaN; % if you haven't added Ap to your geoFcn yet
+        Ap(k) = NaN;
     end
 
     if isfield(st,'Ap_seg')

@@ -1,20 +1,18 @@
 function [out, summary, derived] = runMotor(cfg)
-%RUNMOTOR One-stop runner: validate -> derive -> geometry -> simulate -> summarize -> plot
+%RUNMOTOR runs the sim
 
-% 1) Validate OpenMotor-like inputs
+% 1) Validate inputs
 validateMotorConfig(cfg);
 
-% 2) Compute derived fields (At, Ae, eps, c*)
+% 2) Compute derived fields
 derived = deriveMotorFields(cfg);
 
-% 3) Attach derived nozzle fields into cfg (what the solver expects)
+% 3) Attach derived nozzle fields into cfg
 cfg.noz.At  = derived.noz.At;
 cfg.noz.Ae  = derived.noz.Ae;
 cfg.noz.eps = derived.noz.eps;
 
-% If your nozzleMdotThrust uses Cd, Pa, eps, At, gamma, etc, this is enough.
-
-% 4) Attach geometry object (adds cfg.geo.geoFcn and cfg.geo.const.*)
+% 4) Attach geometry object
 cfg.geo = geo_stack(cfg);
 
 % 5) Run simulation
@@ -33,11 +31,9 @@ fprintf('\n--- Propellant Summary ---\n');
 fprintf('c* (from γ,Tc,M) = %.1f m/s\n', cstar_implied);
 fprintf('----------------------------------\n');
 
-
-
 % 6) Summarize and display
 summary = computeMotorSummary(out, cfg);
 printMotorSummary(summary);
-plotOpenMotorStyle(out, summary);
+plotoutput(out, summary);
 
 end

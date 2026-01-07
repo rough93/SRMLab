@@ -31,7 +31,7 @@ else
     st.Ab = Ab;
 end
 
-% Port flow area (used for port mass flux, erosive metrics)
+% Port flow area
 st.Ap = pi*r^2;
 
 % Chamber free volume contribution from this segment (port volume)

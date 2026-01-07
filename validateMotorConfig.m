@@ -1,5 +1,5 @@
 function validateMotorConfig(cfg)
-%VALIDATEMOTORCONFIG Validate OpenMotor-style config.
+%VALIDATEMOTORCONFIG Validate config.
 % If cfg.stack exists, grain geometry is defined by the stack and cfg.grain.diameter_m etc.
 % are not required.
 

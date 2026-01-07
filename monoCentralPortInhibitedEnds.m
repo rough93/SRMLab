@@ -38,12 +38,12 @@ geo.geoFcn = @(x) evalGeo(max(x,0));
         % Port always burns
         Ab = Ab + 2*pi*r*L;
 
-        % Ends inhibited?
+        % Ends inhibited
         if ~cfg.grain.inhibit_ends
             Ab = Ab + 2*pi*(Ro^2 - r^2);
         end
 
-        % Outer inhibited?
+        % Outer inhibited
         if ~cfg.grain.inhibit_outer
             Ab = Ab + 2*pi*Ro*L;
         end
