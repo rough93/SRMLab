@@ -1,5 +1,5 @@
 function s = computeMotorSummary(out, cfg)
-%COMPUTEMOTORSUMMARY Compute readout metrics
+%COMPUTEMOTORSUMMARY Compute readout metrics (robust to no-burn / short runs)
 
 g0 = 9.80665;
 
@@ -24,6 +24,31 @@ end
 
 % Ensure all referenced histories have a common length
 N = min([numel(t), numel(Pc), numel(F), numel(mdot_noz), numel(Ap_eff)]);
+if isempty(N) || N < 1
+    % Degenerate output, return safe zeros
+    s = struct();
+    s.designation     = "N/A";
+    s.Itot            = 0;
+    s.Isp_delivered   = 0;
+    s.burnTime        = 0;
+    s.volLoading      = cfg.geo.const.Vprop0 / max(cfg.geo.const.Vcase, eps);
+    s.Pc_avg          = 0;
+    s.Pc_peak         = 0;
+    s.Kn_init         = 0;
+    s.Kn_peak         = 0;
+    s.Cf_ideal        = 0;
+    s.Cf_delivered    = 0;
+    s.mprop           = out.mprop_est;
+    s.propLength      = cfg.geo.const.Lprop;
+    s.portThroat      = NaN;
+    s.peakMassFlux    = 0;
+    s.peakPortMassFlux_kg_m2_s  = NaN;
+    s.peakPortMassFlux_lb_in2_s = NaN;
+    s.peakPortMassFluxSeg_kg_m2_s  = [];
+    s.peakPortMassFluxSeg_lb_in2_s = [];
+    return;
+end
+
 t        = t(1:N);
 Pc       = Pc(1:N);
 F        = F(1:N);
@@ -49,8 +74,12 @@ else
     burnTime = t(i1) - t(i0);
 end
 
-% Impulse
-Itot = trapz(t, F);
+% Impulse (robust to short runs / all-zero thrust)
+if numel(t) < 2 || numel(F) < 2
+    Itot = 0;
+else
+    Itot = trapz(t, F);
+end
 
 % Prop mass estimate
 mprop = out.mprop_est;
@@ -59,10 +88,14 @@ mprop = out.mprop_est;
 Isp_del = Itot / (max(mprop, eps) * g0);
 
 % Avg pressure over burn window
-if burnTime > 0
+if burnTime > 0 && numel(t) >= 2
     t_b  = t(i0:i1);
     Pc_b = Pc(i0:i1);
-    Pc_avg = trapz(t_b, Pc_b) / max(t_b(end) - t_b(1), eps);
+    if numel(t_b) < 2
+        Pc_avg = mean(Pc_b);
+    else
+        Pc_avg = trapz(t_b, Pc_b) / max(t_b(end) - t_b(1), eps);
+    end
 else
     Pc_avg = mean(Pc);
 end
@@ -77,7 +110,7 @@ if numel(Ab) < N
     Ab(end+1:N,1) = 0;
 end
 
-Kn_t   = Ab / At;
+Kn_t    = Ab / At;
 Kn_init = Kn_t(max(1, min(i0, N)));
 Kn_peak = max(Kn_t);
 
@@ -87,7 +120,11 @@ Ap0 = st0.Ap;
 portThroat = Ap0 / At;
 
 % Peak throat mass flux: Gt = mdot/At
-Gt_pk = max(mdot_noz / At);
+if isempty(mdot_noz) || all(~isfinite(mdot_noz))
+    Gt_pk = 0;
+else
+    Gt_pk = max(mdot_noz / At);
+end
 
 % Peak port mass flux
 KG_M2_TO_LB_IN2 = 2.20462262185 / (39.3700787402^2);
@@ -102,8 +139,8 @@ else
 end
 
 mask = isfinite(mdot_noz(idx)) & mdot_noz(idx) > 0 & ...
-    isfinite(Ap_eff(idx))   & Ap_eff(idx) > 0 & ...
-    isfinite(Pc(idx))       & Pc(idx) > Pa;
+       isfinite(Ap_eff(idx))   & Ap_eff(idx) > 0 & ...
+       isfinite(Pc(idx))       & Pc(idx) > Pa;
 
 valid = idx(mask);
 
@@ -141,15 +178,20 @@ end
 % Ideal and delivered thrust coefficients
 Cf_ideal_pk = nozzleCfIdeal(cfg.noz.eps, cfg.prop.gamma, Pc_peak, cfg.noz.Pa);
 
-den = trapz(t, Pc * At);
+% Delivered Cf: Itot / integral(Pc*At dt) (robust)
+if numel(t) < 2
+    den = 0;
+else
+    den = trapz(t, Pc * At);
+end
 Cf_del = Itot / max(den, eps);
 
-% Volume loading ----
+% Volume loading
 Vcase  = cfg.geo.const.Vcase;
 Vprop0 = cfg.geo.const.Vprop0;
-volLoading = Vprop0 / Vcase;
+volLoading = Vprop0 / max(Vcase, eps);
 
-% Motor designation
+% Motor designation (robust)
 s.designation = suggestDesignation(Itot, burnTime, 0.07);
 
 % Bundle
@@ -173,6 +215,59 @@ s.propLength = cfg.geo.const.Lprop;
 
 s.portThroat = portThroat;
 s.peakMassFlux = Gt_pk;
+
+% Nozzle readout
+s.noz = struct();
+
+% Common nozzle fields (always)
+s.noz.mode = "manual";
+if isfield(cfg.noz,'mode'); s.noz.mode = string(cfg.noz.mode); end
+
+s.noz.Cd  = cfg.noz.Cd;
+s.noz.Pa  = cfg.noz.Pa;
+
+% Geometry (prefer the solved areas if present)
+s.noz.At  = cfg.noz.At;
+s.noz.Ae  = cfg.noz.Ae;
+s.noz.eps = cfg.noz.eps;
+
+% Diameters if present
+if isfield(cfg.noz,'throat_diameter_m'); s.noz.Dt_m = cfg.noz.throat_diameter_m; end
+if isfield(cfg.noz,'exit_diameter_m');   s.noz.De_m = cfg.noz.exit_diameter_m;   end
+
+% Efficiencies
+s.noz.efficiency = 1;
+if isfield(cfg.noz,'efficiency') && isfinite(cfg.noz.efficiency)
+    s.noz.efficiency = cfg.noz.efficiency;
+end
+
+s.noz.thrust_efficiency = 1;
+if isfield(cfg.noz,'thrust_efficiency') && isfinite(cfg.noz.thrust_efficiency)
+    s.noz.thrust_efficiency = cfg.noz.thrust_efficiency;
+end
+
+% Auto-sizing extras (only meaningful in auto mode)
+if s.noz.mode == "auto" && isfield(cfg.noz,'auto')
+    a = cfg.noz.auto;
+
+    if isfield(a,'targetPc_Pa') && isfinite(a.targetPc_Pa)
+        s.noz.auto_targetPc_Pa = a.targetPc_Pa;
+    end
+    if isfield(a,'targetEps') && isfinite(a.targetEps)
+        s.noz.auto_targetEps = a.targetEps;
+    end
+    if isfield(a,'Pe_target_Pa') && isfinite(a.Pe_target_Pa)
+        s.noz.auto_targetPe_Pa = a.Pe_target_Pa;
+    end
+
+    % If a cone length is computed in auto sizing, include it
+    if isfield(cfg.noz,'divergent_length_m') && isfinite(cfg.noz.divergent_length_m)
+        s.noz.divergent_length_m = cfg.noz.divergent_length_m;
+    end
+    if isfield(cfg.noz,'divergence_half_angle_deg')
+        s.noz.divergence_half_angle_deg = cfg.noz.divergence_half_angle_deg;
+    end
+end
 end
 
 function des = suggestDesignation(Itot, burnTime, tol)
@@ -201,4 +296,5 @@ end
 F_avg = Itot / max(burnTime, eps);
 
 des = sprintf('%s%d (%.0f%%)', letter, round(F_avg), tol*100);
+
 end

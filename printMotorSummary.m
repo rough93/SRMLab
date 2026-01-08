@@ -28,4 +28,40 @@ if isfield(s,'peakPortMassFluxSeg_lb_in2_s') && ~isempty(s.peakPortMassFluxSeg_l
     end
 end
 fprintf('===========================\n\n');
+% ===== Nozzle Summary =====
+if isfield(s,'noz') && ~isempty(s.noz)
+    nz = s.noz;
+
+    fprintf('\n--- Nozzle Summary (%s) ---\n', nz.mode);
+
+    fprintf('At (m^2):    %.4e\n', nz.At);
+    fprintf('Ae (m^2):    %.4e\n', nz.Ae);
+    fprintf('eps (Ae/At): %.4f\n', nz.eps);
+
+    if isfield(nz,'Dt_m'); fprintf('Dt (in):      %.6f\n', nz.Dt_m*39.3701); end
+    if isfield(nz,'De_m'); fprintf('De (in):      %.6f\n', nz.De_m*39.3701); end
+
+    fprintf('Cd:          %.4f\n', nz.Cd);
+    fprintf('eta (noz):   %.4f\n', nz.efficiency);
+    fprintf('eta (thrust):%.4f\n', nz.thrust_efficiency);
+
+    if nz.mode == "auto"
+        if isfield(nz,'auto_targetPc_Pa')
+            fprintf('Auto target Pc (Pa): %.3e\n', nz.auto_targetPc_Pa);
+        end
+        if isfield(nz,'auto_targetPe_Pa')
+            fprintf('Auto target Pe (Pa): %.3e\n', nz.auto_targetPe_Pa);
+        end
+        if isfield(nz,'auto_targetEps')
+            fprintf('Auto target eps:     %.4f\n', nz.auto_targetEps);
+        end
+        if isfield(nz,'divergence_half_angle_deg') && isfield(nz,'divergent_length_m')
+            fprintf('Cone: half-angle %.2f deg, length %.4f in\n', ...
+                nz.divergence_half_angle_deg, nz.divergent_length_m*39.3701);
+        end
+    end
+
+    fprintf('===========================\n\n');
+end
+
 end

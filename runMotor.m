@@ -1,8 +1,12 @@
 function [out, summary, derived] = runMotor(cfg)
 %RUNMOTOR runs the sim
 
-% 1) Validate inputs
+% 1) Validate inputs, assemble nozzle
 validateMotorConfig(cfg);
+
+% 4) Attach geometry object
+cfg.geo = geo_stack(cfg);
+cfg = assembleNozzle(cfg);
 
 % 2) Compute derived fields
 derived = deriveMotorFields(cfg);
@@ -11,9 +15,6 @@ derived = deriveMotorFields(cfg);
 cfg.noz.At  = derived.noz.At;
 cfg.noz.Ae  = derived.noz.Ae;
 cfg.noz.eps = derived.noz.eps;
-
-% 4) Attach geometry object
-cfg.geo = geo_stack(cfg);
 
 % 5) Run simulation
 out = simulateMotor(cfg);

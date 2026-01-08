@@ -39,6 +39,12 @@ tmax = cfg.num.tmax;
 x0  = 0;
 Pc0 = cfg.noz.Pa;
 
+% Propellant sustain pressure (Pa). If 0, burning is allowed as soon as Pc>Pa.
+Pmin = 0;
+if isfield(cfg,'prop') && isfield(cfg.prop,'Pmin_Pa') && isfinite(cfg.prop.Pmin_Pa)
+    Pmin = cfg.prop.Pmin_Pa;
+end
+
 % Preallocate (simple)
 Nmax = ceil(tmax/dt) + 5;
 t  = zeros(1, Nmax);
@@ -78,10 +84,9 @@ while t(k) < tmax
 
     % Don't break immediately at burnout, allow blowdown.
     % Stop only when pressure is basically ambient and burning is done.
-    if st.done && Pc(k) < 1.05*cfg.noz.Pa
+    if (st.done || (Pc(k) < max(Pmin, cfg.noz.Pa))) && Pc(k) < 1.05*cfg.noz.Pa
         break;
     end
-
 
     % Record outputs using current state
     rdot(k) = a * max(Pc(k), 1.0)^n;
@@ -91,7 +96,7 @@ while t(k) < tmax
 
     % RK4 step on [x; Pc]
     yk = [x(k); Pc(k)];
-    f  = @(y) rhs(y, cfg, rho, a, n, gamma, Rspec, Tc);
+    f  = @(y) rhs(y, cfg, rho, a, n, gamma, Rspec, Tc, Pmin);
 
     k1 = f(yk);
     k2 = f(yk + 0.5*dt*k1);
@@ -122,10 +127,25 @@ F    = F(1:npts);
 Ap   = Ap(1:npts);
 Ap_seg_hist = Ap_seg_hist(1:npts,:);
 
+Pc_pk = max(Pc);
+if isfield(cfg.prop,'Pmin_Pa') && Pc_pk < max(cfg.prop.Pmin_Pa, cfg.noz.Pa)*1.001
+    warning('Motor did not reach sustain pressure (Pc_peak < Pmin). Expect ~0 thrust/impulse unless throat is reduced.');
+end
+
 % Integrals
-Itot = trapz(t, F);
-mprop_est = trapz(t, mdg);
-Isp_est = Itot / (mprop_est * g0);
+if numel(t) < 2 || numel(F) < 2
+    Itot = 0;
+else
+    Itot = trapz(t, F);
+end
+
+if numel(t) < 2 || numel(mdg) < 2
+    mprop_est = 0;
+else
+    mprop_est = trapz(t, mdg);
+end
+Isp_est = Itot / (max(mprop_est, eps) * g0);
+
 
 out.t = t;
 out.x = x;
@@ -144,9 +164,9 @@ out.Ap_seg = Ap_seg_hist;
 
 end
 
-function dydt = rhs(y, cfg, rho, a, n, gamma, Rspec, Tc)
+function dydt = rhs(y, cfg, rho, a, n, gamma, Rspec, Tc, Pmin)
 x  = y(1);
-Pc = max(y(2), 1.0); % Pa, avoid 0 in nozzle model
+Pc = max(y(2), 0.0); % Pa
 
 st = cfg.geo.geoFcn(x);
 
@@ -154,21 +174,23 @@ Ab   = max(st.Ab, 0);
 Vc   = max(st.Vc, 1e-12);
 dVdx = max(st.dVdx, 0);
 
-done = st.done || Ab <= 0;
+% Burn only if geometry is not done AND Pc is above sustain threshold.
+% Use max(Pmin, Pa) so never "burn below ambient".
+burning = (~st.done) && (Ab > 0) && (Pc >= max(Pmin, cfg.noz.Pa));
 
-if ~done
+if burning
     rdot = a * Pc^n;
     mdot_gen = rho * Ab * rdot;
     dVdt = dVdx * rdot;
     dxdt = rdot;
 else
-    % Blowdown: no generation, no regression, fixed volume
     mdot_gen = 0;
     dVdt = 0;
     dxdt = 0;
 end
 
-mdot_noz = nozzleMassFlow(Pc, cfg.noz.Cd, cfg.noz.At, gamma, Rspec, Tc);
+% Nozzle mass flow: keep it well-behaved by using at least ambient in the choked model
+mdot_noz = nozzleMassFlow(max(Pc, cfg.noz.Pa), cfg.noz.Cd, cfg.noz.At, gamma, Rspec, Tc);
 
 % Pressure ODE
 dPc_dt = (Rspec*Tc/Vc) * (mdot_gen - mdot_noz) - (Pc/Vc) * dVdt;

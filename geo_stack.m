@@ -48,7 +48,6 @@ geo.geoFcn = @(x) evalStack(max(x,0));
                     sti = geo_bates_segment(x, s);
 
                 case "finocyl"
-                    % Implement later
                     sti = geo_finocyl_segment(x, s);
 
                 otherwise
